@@ -28,7 +28,7 @@ function asyncReducer(state, action) {
   }
 }
 
-function useAsync(asyncCallback, initialState) {
+function useAsync(initialState) {
     // -------------------------- start --------------------------
     const [state, dispatch] = React.useReducer(asyncReducer, {
       status: 'idle',
@@ -36,13 +36,9 @@ function useAsync(asyncCallback, initialState) {
       error: null,
       ...initialState
     })
-  
-    React.useEffect(() => {
-      // 💰 this first early-exit bit is a little tricky, so let me give you a hint:
-      const promise = asyncCallback()
-      if (!promise) {
-        return
-      }
+    console.log("re-render useAsync")
+    const run = React.useCallback(promise => {
+      console.log("executes run")
       dispatch({type: 'pending'})
       promise.then(
         data => {
@@ -52,22 +48,25 @@ function useAsync(asyncCallback, initialState) {
           dispatch({type: 'rejected', error})
         },
       )
-    }, [asyncCallback])
+    }, []);
+
     // --------------------------- end ---------------------------
-    return state;
+    return {...state, run};
 }
 
 function PokemonInfo({pokemonName}) {
-  const pokemonAsyncCallback = React.useCallback(() => {
-    if (!pokemonName) {
-      return
-    }
-    return fetchPokemon(pokemonName)
-  }, [pokemonName]);
-  // 🐨 here's how you'll use the new useAsync hook you're writing:
-  const state = useAsync(pokemonAsyncCallback, {status: pokemonName ? 'pending' : 'idle'})
-  // 🐨 this will change from "pokemon" to "data"
-  const {data: pokemon, status, error} = state
+  const {data: pokemon, status, error, run} = useAsync({ status: pokemonName ? 'pending' : 'idle' })
+
+React.useEffect(() => {
+  if (!pokemonName) {
+    return
+  }
+  // 💰 note the absence of `await` here. We're literally passing the promise
+  // to `run` so `useAsync` can attach it's own `.then` handler on it to keep
+  // track of the state of the promise.
+  const pokemonPromise = fetchPokemon(pokemonName)
+  run(pokemonPromise)
+}, [pokemonName, run])
 
   switch (status) {
     case 'idle':
